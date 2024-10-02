@@ -16,7 +16,7 @@
 
 
 
-## [Settings](https://github.com/hasan1818666891/xKuCoinBot/blob/master/.env-example/)
+## [Settings](https://github.com/hasan1818666891/xKuCoin/blob/master/.env-example/)
 | Settings                |                                 Description                                  |
 |-------------------------|:----------------------------------------------------------------------------:|
 | **API_ID / API_HASH**   | Platform data from which to run the Telegram session (by default - android)  |
@@ -40,7 +40,7 @@ Before you begin, make sure you have the following installed:
 3. Record the API_ID and API_HASH provided after registering your application in the .env file.
 
 ## Installation
-You can download the [**repository**](https://github.com/hasan1818666891/xKuCoinBot) by cloning it to your system and installing the necessary dependencies:
+You can download the [**repository**](https://github.com/hasan1818666891/xKuCoin) by cloning it to your system and installing the necessary dependencies:
 ```shell
 git clone https://github.com/hasan1818666891/xKuCoin.git
 cd xKuCoin
@@ -70,9 +70,9 @@ python3 main.py
 
 You can also use arguments for quick start, for example:
 ```shell
-~/xKuCoinBot >>> python3 main.py --action (1/2)
+~/xKuCoin >>> python3 main.py --action (1/2)
 # Or
-~/xKuCoinBot >>> python3 main.py -a (1/2)
+~/xKuCoin >>> python3 main.py -a (1/2)
 
 # 1 - Run clicker
 # 2 - Creates a session
@@ -90,9 +90,9 @@ python main.py
 
 You can also use arguments for quick start, for example:
 ```shell
-~/xKuCoinBot >>> python main.py --action (1/2)
+~/xKuCoin >>> python main.py --action (1/2)
 # Or
-~/xKuCoinBot >>> python main.py -a (1/2)
+~/xKuCoin >>> python main.py -a (1/2)
 
 # 1 - Run clicker
 # 2 - Creates a session
