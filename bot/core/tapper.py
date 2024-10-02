@@ -1,0 +1,287 @@
+#hasan1818666891
+#2-OCT-2024:1:00 PM
+
+import asyncio
+import base64
+import os
+from time import time
+from urllib.parse import unquote
+import aiohttp
+from aiohttp_proxy import ProxyConnector
+from better_proxy import Proxy
+from pyrogram import Client
+from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered
+from pyrogram.raw import types
+from pyrogram.raw.functions.messages import RequestAppWebView
+from bot.config import settings
+from bot.utils import logger
+from bot.exceptions import InvalidSession
+from .headers import headers
+from random import randint, choices
+
+class Tapper:
+    def __init__(self, tg_client: Client):
+        self.tg_client = tg_client
+        self.session_name = tg_client.name
+        self.start_param = 'cm91dGU9JTJGdGFwLWdhbWUlM0ZpbnZpdGVyVXNlcklkJTNEMTgyNzAxNTYzMiUyNnJjb2RlJTNEUUJBOVY2UVU='
+
+    async def get_tg_web_data(self, proxy: str | None) -> dict[str, str]:
+        if proxy:
+            proxy = Proxy.from_str(proxy)
+            proxy_dict = dict(
+                scheme=proxy.protocol,
+                hostname=proxy.host,
+                port=proxy.port,
+                username=proxy.login,
+                password=proxy.password
+            )
+        else:
+            proxy_dict = None
+
+        self.tg_client.proxy = proxy_dict
+
+        try:
+            if not self.tg_client.is_connected:
+                try:
+                    await self.tg_client.connect()
+
+                except (Unauthorized, UserDeactivated, AuthKeyUnregistered):
+                    raise InvalidSession(self.session_name)
+
+            peer = await self.tg_client.resolve_peer('xkucoinbot')
+            link = "cm91dGU9JTJGdGFwLWdhbWUlM0ZpbnZpdGVyVXNlcklkJTNEMTgyNzAxNTYzMiUyNnJjb2RlJTNEUUJBOVY2UVU"
+            web_view = await self.tg_client.invoke(RequestAppWebView(
+                peer=peer,
+                platform='android',
+                app=types.InputBotAppShortName(bot_id=peer, short_name="kucoinminiapp"),
+                write_allowed=False,
+                start_param=link
+            ))
+            auth_url = web_view.url
+            init_data = {}
+            tg_web_data = unquote(
+                string=unquote(string=auth_url.split('tgWebAppData=')[1].split('&tgWebAppVersion')[0]))
+            tg_web_data_parts = tg_web_data.split('&')
+            user_data = tg_web_data_parts[0].split('=')[1]
+            chat_instance = tg_web_data_parts[1].split('=')[1]
+            chat_type = tg_web_data_parts[2].split('=')[1]
+            start_param = tg_web_data_parts[3].split('=')[1]
+            auth_date = tg_web_data_parts[4].split('=')[1]
+            hash_value = tg_web_data_parts[5].split('=')[1]
+            self.start_param = start_param
+
+            init_data['hash'] = hash_value
+            init_data['auth_date'] = auth_date
+            init_data['via'] = "miniApp"
+            init_data['user'] = user_data.replace('"', '\"')
+            init_data['chat_type'] = chat_type
+            init_data['chat_instance'] = chat_instance
+            init_data['start_param'] = "cm91dGU9JTJGdGFwLWdhbWUlM0ZpbnZpdGVyVXNlcklkJTNEMTgyNzAxNTYzMiUyNnJjb2RlJTNEUUJBOVY2UVU"
+            if self.tg_client.is_connected:
+                await self.tg_client.disconnect()
+
+            return init_data
+
+        except InvalidSession as error:
+            raise error
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error during Authorization: {error}")
+            await asyncio.sleep(delay=3)
+
+    async def login(self, http_client: aiohttp.ClientSession, tg_web_data: dict[str, str]):
+        try:
+            start_param = get_link_code()
+            decoded_link = base64.b64decode(bytes(start_param, 'utf-8') + b'==').decode("utf-8")
+            json_data = {
+                "inviterUserId": str(decoded_link.split('UserId%3D')[1].split('%')[0]),
+                "extInfo": tg_web_data
+            }
+            http_client.headers['Content-Type'] = 'application/json'
+            response = await http_client.post("https://www.kucoin.com/_api/xkucoin/platform-telebot/game/login?lang=en_US",
+                                              json=json_data)
+
+            response.raise_for_status()
+            http_client.cookie_jar.update_cookies(response.cookies)
+            response_json = await response.json()
+            return response_json
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when logging: {error}")
+            await asyncio.sleep(delay=randint(3, 7))
+
+    async def get_info_data(self, http_client: aiohttp.ClientSession):
+        try:
+            await asyncio.sleep(delay=1)
+            await http_client.get(f"https://www.kucoin.com/_api/xkucoin/ucenter/user-info?lang=en_US")
+            await http_client.get('https://www.kucoin.com/_api/xkucoin/currency/rates?base=USD&targets=&lang=en_US')
+            await http_client.get('https://www.kucoin.com/_api/xkucoin/currency/transfer-currencies?flat=1&currencyType=2&lang=en_US')
+            url = "https://www.kucoin.com/_api/xkucoin/bullet-usercenter/v1/bullet-public"
+            params = {'biz': "kumex"}
+            payload = {'protocol': 'socket.io','source': 'web','biz': 'kumex','isWs': 'true','encrypt': 'true'}
+            res = await http_client.post(url,params=params,data=payload)
+            res.raise_for_status()
+            response_json = await res.json()
+            http_client.cookie_jar.update_cookies({"x-bullet-token": response_json["data"]["token"]})
+            
+            await asyncio.sleep(delay=1)
+            
+            response = await http_client.get(f"https://www.kucoin.com/_api/xkucoin/platform-telebot/game/summary?lang=en_US")
+            response.raise_for_status()
+            response_json = await response.json()
+            await http_client.get('https://www.kucoin.com/_api/xkucoin/currency/v2/prices?base=USD&targets=&lang=en_US')
+            if response_json.get('code') == '200':
+                if response_json["data"]["invited"] == True:
+                    inviter = response_json["data"]["inviterPreview"]["inviter"]
+                    #logger.success(f"{self.session_name} | You invited by : <g>{inviter}</g>")  
+            elif response_json.get('code') == '401':
+                await asyncio.sleep(delay=3)
+                return await self.get_info_data(http_client=http_client)
+
+            return response_json['data']
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when getting user info data: {error}")
+            await asyncio.sleep(delay=randint(3, 7))
+
+    async def check_proxy(self, http_client: aiohttp.ClientSession, proxy: Proxy) -> None:
+        try:
+            response = await http_client.get(url='https://ipinfo.io/ip', timeout=aiohttp.ClientTimeout(10))
+            ip = (await response.text())
+            logger.info(f"{self.session_name} | Proxy IP: {ip}")
+        except Exception as error:
+            logger.error(f"{self.session_name} | Proxy: {proxy} | Error: {error}")
+
+    async def claim_init_reward(self, http_client: aiohttp.ClientSession):
+        try:
+            hash_id = self.generate_random_string(length=16)
+            boundary = f'----WebKitFormBoundary{hash_id}'
+            form_data = (
+                f'--{boundary}\r\n'
+                f'Content-Disposition: form-data; name="taskType"\r\n\r\n'
+                f'FIRST_REWARD\r\n'
+                f'--{boundary}\r\n'
+            )
+            http_client.headers['Content-Type'] = f'multipart/form-data; boundary={boundary}'
+            response = await http_client.post('https://www.kucoin.com/_api/xkucoin/platform-telebot/game/obtain',data = form_data)
+            http_client.headers['Content-Type'] = 'application/json'
+            response.raise_for_status()
+            response_json = await response.json()
+            if response_json['msg'] == 'success':
+                logger.success(f"{self.session_name} | Init Reward Claimed!")
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when claiming init reward: {error}")
+            await asyncio.sleep(delay=3)
+
+    def generate_random_string(self, length=8):
+        characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+        random_string = ''
+        for _ in range(length):
+            random_index = int((len(characters) * int.from_bytes(os.urandom(1), 'big')) / 256)
+            random_string += characters[random_index]
+        return random_string
+
+    async def send_taps(self, http_client: aiohttp.ClientSession, taps: int, available_taps: int):
+        try:
+            hash_id = self.generate_random_string(length=16)
+            boundary = f'----WebKitFormBoundary{hash_id}'
+            form_data = (
+                f'--{boundary}\r\n'
+                f'Content-Disposition: form-data; name="increment"\r\n\r\n'
+                f'{taps}\r\n'
+                f'--{boundary}\r\n'
+                f'Content-Disposition: form-data; name="molecule"\r\n\r\n'
+                f'{available_taps - taps}\r\n'
+                f'--{boundary}\r\n'
+            )
+
+            http_client.headers['Content-Type'] = f'multipart/form-data; boundary={boundary}'
+            response = await http_client.post('https://www.kucoin.com/_api/xkucoin/platform-telebot/game/gold/increase?lang=en_US',
+                                              data=form_data)
+            http_client.headers['Content-Type'] = 'application/json'
+            response.raise_for_status()
+            response_json = await response.json()
+            return response_json
+
+        except Exception as error:
+            logger.error(f"{self.session_name} | Unknown error when sending taps: {error}")
+            await asyncio.sleep(delay=3)
+            return None
+
+    async def run(self, user_agent: str, proxy: str | None) -> None:
+        access_token_created_time = 0
+        proxy_conn = ProxyConnector().from_url(proxy) if proxy else None
+        headers["User-Agent"] = user_agent
+
+        async with aiohttp.ClientSession(headers=headers, connector=proxy_conn) as http_client:
+            if proxy:
+                await self.check_proxy(http_client=http_client, proxy=proxy)
+
+            token_live_time = randint(3500, 3600)
+            while True:
+                try:
+                    sleep_time = randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
+                    if time() - access_token_created_time >= token_live_time:
+                        tg_web_data = await self.get_tg_web_data(proxy=proxy)
+                        if tg_web_data is None:
+                            continue
+
+                        login_data = await self.login(http_client=http_client, tg_web_data=tg_web_data)
+                        if not login_data.get('success', False):
+                            logger.warning(f'{self.session_name} | Error while logining: {login_data.get("msg")}')
+                            continue
+
+                        access_token_created_time = time()
+                        token_live_time = randint(3500, 3600)
+                        
+                        user_info = await self.get_info_data(http_client=http_client)
+                        balance = user_info['availableAmount']
+                        logger.info(f"{self.session_name} | Balance: <e>{balance}</e> coins")
+                        need_to_check = user_info['needToCheck']
+                        if need_to_check:
+                            await self.claim_init_reward(http_client=http_client)
+
+                        game_config = user_info['gameConfig']
+                        taps_limit = game_config['feedUpperLimit']
+                        recover_speed = game_config['feedRecoverSpeed']
+                        interval = game_config['goldIncreaseInterval']
+                        available_taps = user_info['feedPreview']['molecule']
+                        if available_taps <= settings.MIN_ENERGY:
+                            sleep_before_taps = int((taps_limit - available_taps) / recover_speed)
+                            logger.info(f'{self.session_name} | Not enough taps, going to sleep '
+                                        f'<y>{round(sleep_before_taps / 60, 1)}</y> min')
+                            await asyncio.sleep(delay=sleep_before_taps)
+                            available_taps = taps_limit
+
+                        while available_taps > settings.MIN_ENERGY:
+                            taps = min(available_taps, randint(settings.RANDOM_TAPS_COUNT[0], settings.RANDOM_TAPS_COUNT[1]))
+                            response = await self.send_taps(http_client=http_client, taps=taps, available_taps=available_taps)
+                            if response:
+                                await asyncio.sleep(delay=interval)
+                                available_taps = available_taps - taps + (interval * recover_speed)
+                                logger.success(f"{self.session_name} | Successful tapped! Got <g>+{taps}</g> Coins | "
+                                               f"Available Taps:<lc>{available_taps}</lc>")
+                            else:
+                                logger.warning(f"{self.session_name} | Failed send taps")
+                                break
+
+                    logger.info(f"{self.session_name} | Sleep <y>{round(sleep_time / 60, 1)}</y> min")
+                    await asyncio.sleep(delay=sleep_time)
+
+                except InvalidSession as error:
+                    raise error
+
+                except Exception as error:
+                    logger.error(f"{self.session_name} | Unknown error: {error}")
+                    await asyncio.sleep(delay=randint(60, 120))
+
+
+def get_link_code() -> str:
+    return "cm91dGU9JTJGdGFwLWdhbWUlM0ZpbnZpdGVyVXNlcklkJTNEMTgyNzAxNTYzMiUyNnJjb2RlJTNEUUJBOVY2UVU"
+
+async def run_tapper(tg_client: Client, user_agent: str, proxy: str | None):
+    try:
+        await Tapper(tg_client=tg_client).run(user_agent=user_agent, proxy=proxy)
+    except InvalidSession:
+        logger.error(f"{tg_client.name} | Invalid Session")
