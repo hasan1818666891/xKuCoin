@@ -42,7 +42,7 @@ Before you begin, make sure you have the following installed:
 ## Installation
 You can download the [**repository**](https://github.com/hasan1818666891/xKuCoinBot) by cloning it to your system and installing the necessary dependencies:
 ```shell
-git clone https://github.com/hasan1818666891/xKuCoinBot
+git clone https://github.com/hasan1818666891/xKuCoin.git
 cd xKuCoinBot
 ```
 
