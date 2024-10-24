@@ -9,12 +9,10 @@ from bot.utils import logger
 from bot.core.tapper import run_tapper
 from bot.core.registrator import register_sessions, get_tg_client
 from bot.utils.accounts import Accounts
+from art import tprint 
 
-start_text = """
-
- _     _ _     _ _     _ _______  _____  _____ __   _                           \___/  |____/  |     | |       |     |   |   | \  |                          _/   \_ |    \_ |_____| |_____  |_____| __|__ |  \_|                         
-
-                                         by hasan1818666891                                                                                                                    
+tprint('xKuCoin')
+start_text = """by hasan1818666891                                                                                                                    
 Select an action:
 
     1. Run bot
