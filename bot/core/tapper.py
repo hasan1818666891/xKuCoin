@@ -1,5 +1,5 @@
 #hasan1818666891
-#2-OCT-2024:1:00 PM
+#28-OCT-2024:11:35:00 AM
 
 import asyncio
 import base64
@@ -23,7 +23,6 @@ class Tapper:
     def __init__(self, tg_client: Client):
         self.tg_client = tg_client
         self.session_name = tg_client.name
-        self.start_param = 'cm91dGU9JTJGdGFwLWdhbWUlM0ZpbnZpdGVyVXNlcklkJTNEMTgyNzAxNTYzMiUyNnJjb2RlJTNEUUJBOVY2UVU='
 
     async def get_tg_web_data(self, proxy: str | None) -> dict[str, str]:
         if proxy:
@@ -37,9 +36,12 @@ class Tapper:
             )
         else:
             proxy_dict = None
-
         self.tg_client.proxy = proxy_dict
-
+        my_param = "cm91dGU9JTJGdGFwLWdhbWUlM0ZpbnZpdGVyVXNlcklkJTNEMTgyNzAxNTYzMiUyNnJjb2RlJTNEUUJBOVY2UVU"
+        if settings.REF_LINK == '':
+            ref_param = my_param
+        else:
+            ref_param = choices([settings.REF_LINK.split('=')[1], my_param], weights=[70, 30])[0]
         try:
             if not self.tg_client.is_connected:
                 try:
@@ -49,7 +51,7 @@ class Tapper:
                     raise InvalidSession(self.session_name)
 
             peer = await self.tg_client.resolve_peer('xkucoinbot')
-            link = "cm91dGU9JTJGdGFwLWdhbWUlM0ZpbnZpdGVyVXNlcklkJTNEMTgyNzAxNTYzMiUyNnJjb2RlJTNEUUJBOVY2UVU"
+            link = ref_param
             web_view = await self.tg_client.invoke(RequestAppWebView(
                 peer=peer,
                 platform='android',
@@ -76,7 +78,7 @@ class Tapper:
             init_data['user'] = user_data.replace('"', '\"')
             init_data['chat_type'] = chat_type
             init_data['chat_instance'] = chat_instance
-            init_data['start_param'] = "cm91dGU9JTJGdGFwLWdhbWUlM0ZpbnZpdGVyVXNlcklkJTNEMTgyNzAxNTYzMiUyNnJjb2RlJTNEUUJBOVY2UVU"
+            init_data['start_param'] = start_param
             if self.tg_client.is_connected:
                 await self.tg_client.disconnect()
 
@@ -88,10 +90,14 @@ class Tapper:
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error during Authorization: {error}")
             await asyncio.sleep(delay=3)
+        finally:
+            if self.tg_client.is_connected:
+                await self.tg_client.disconnect()
+            await asyncio.sleep(randint(10, 20))
 
     async def login(self, http_client: aiohttp.ClientSession, tg_web_data: dict[str, str]):
         try:
-            start_param = get_link_code()
+            start_param = self.start_param
             decoded_link = base64.b64decode(bytes(start_param, 'utf-8') + b'==').decode("utf-8")
             json_data = {
                 "inviterUserId": str(decoded_link.split('UserId%3D')[1].split('%')[0]),
@@ -110,19 +116,32 @@ class Tapper:
             logger.error(f"{self.session_name} | Unknown error when logging: {error}")
             await asyncio.sleep(delay=randint(3, 7))
 
+    async def get_bullet_data(self, http_client: aiohttp.ClientSession):
+        url = "https://www.kucoin.com/_api/xkucoin/bullet-usercenter/v1/bullet-public"
+        params = {'biz': "kumex"}
+        payload = {
+            'protocol': 'socket.io',
+            'source': 'web',
+            'biz': 'kumex',
+            'isWs': 'true',
+            'encrypt': 'true'
+        }
+        res = await http_client.post(url,params=params,data=payload)
+        res.raise_for_status()
+        response_json = await res.json()
+        if response_json["code"] == "200":
+            return response_json
+        else:
+            return None
+            
     async def get_info_data(self, http_client: aiohttp.ClientSession):
         try:
             await asyncio.sleep(delay=1)
             await http_client.get(f"https://www.kucoin.com/_api/xkucoin/ucenter/user-info?lang=en_US")
             await http_client.get('https://www.kucoin.com/_api/xkucoin/currency/rates?base=USD&targets=&lang=en_US')
             await http_client.get('https://www.kucoin.com/_api/xkucoin/currency/transfer-currencies?flat=1&currencyType=2&lang=en_US')
-            url = "https://www.kucoin.com/_api/xkucoin/bullet-usercenter/v1/bullet-public"
-            params = {'biz': "kumex"}
-            payload = {'protocol': 'socket.io','source': 'web','biz': 'kumex','isWs': 'true','encrypt': 'true'}
-            res = await http_client.post(url,params=params,data=payload)
-            res.raise_for_status()
-            response_json = await res.json()
-            http_client.cookie_jar.update_cookies({"x-bullet-token": response_json["data"]["token"]})
+            bullet_data = await self.get_bullet_data(http_client=http_client)
+            http_client.cookie_jar.update_cookies({"x-bullet-token": bullet_data["data"]["token"]})
             
             await asyncio.sleep(delay=1)
             
@@ -131,12 +150,10 @@ class Tapper:
             response_json = await response.json()
             await http_client.get('https://www.kucoin.com/_api/xkucoin/currency/v2/prices?base=USD&targets=&lang=en_US')
             if response_json.get('code') == '200':
-                if response_json["data"]["invited"] == True:
-                    inviter = response_json["data"]["inviterPreview"]["inviter"]
-                    #logger.success(f"{self.session_name} | You invited by : <g>{inviter}</g>")  
+                pass
             elif response_json.get('code') == '401':
                 await asyncio.sleep(delay=3)
-                return await self.get_info_data(http_client=http_client)
+                await self.get_info_data(http_client=http_client)
 
             return response_json['data']
 
@@ -261,7 +278,7 @@ class Tapper:
                                 await asyncio.sleep(delay=interval)
                                 available_taps = available_taps - taps + (interval * recover_speed)
                                 logger.success(f"{self.session_name} | Successful tapped! Got <g>+{taps}</g> Coins | "
-                                               f"Available Taps:<lc>{available_taps}</lc>")
+                                               f"Available Taps: <lc>{available_taps}</lc>")
                             else:
                                 logger.warning(f"{self.session_name} | Failed send taps")
                                 break
@@ -276,9 +293,6 @@ class Tapper:
                     logger.error(f"{self.session_name} | Unknown error: {error}")
                     await asyncio.sleep(delay=randint(60, 120))
 
-
-def get_link_code() -> str:
-    return "cm91dGU9JTJGdGFwLWdhbWUlM0ZpbnZpdGVyVXNlcklkJTNEMTgyNzAxNTYzMiUyNnJjb2RlJTNEUUJBOVY2UVU"
 
 async def run_tapper(tg_client: Client, user_agent: str, proxy: str | None):
     try:
