@@ -153,7 +153,7 @@ class Tapper:
                 pass
             elif response_json.get('code') == '401':
                 await asyncio.sleep(delay=3)
-                await self.get_info_data(http_client=http_client)
+                return await self.get_info_data(http_client=http_client)
 
             return response_json['data']
 
